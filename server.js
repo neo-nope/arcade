@@ -78,7 +78,9 @@ const achievements = {
   'first-blood': { name: 'First Blood', description: 'Your first game!', icon: '🩸' },
   'bottom-feeder': { name: 'Bottom Feeder', description: 'Consistently terrible', icon: '🐟' },
   'cheater-detected': { name: 'Sus Behavior', description: 'Impossible score detected', icon: '🚨' },
-  'admin-privilege': { name: 'Admin Privilege', description: 'Username is "admin"', icon: '👑' }
+  'admin-privilege': { name: 'Admin Privilege', description: 'Username is "admin"', icon: '👑' },
+  'old': { name: 'Old', description: 'You clicked on the dino game! Welcome to the prehistoric era!', icon: '🦕' },
+  'idiot': { name: 'Idiot', description: 'Just use the website! nobody makes apps these days', icon: '😂🫵' },
 };
 
 // Routes
@@ -276,6 +278,30 @@ app.get('/api/achievements', (req, res) => {
       res.json(userAchievements);
     }
   );
+});
+
+// Grant achievement (for specific achievements like clicking on dino)
+app.post('/api/achievement/:achievementName', (req, res) => {
+  const achievementName = req.params.achievementName;
+  
+  // Check if user is logged in
+  if (!req.session.userId) {
+    return res.status(401).json({ error: 'Not logged in' });
+  }
+  
+  // Check if achievement exists
+  if (!achievements[achievementName]) {
+    return res.status(400).json({ error: 'Achievement not found' });
+  }
+  
+  // Grant the achievement
+  grantAchievement(req.session.userId, achievementName);
+  
+  res.json({ 
+    success: true, 
+    achievement: achievements[achievementName],
+    message: `Achievement unlocked: ${achievements[achievementName].name}!`
+  });
 });
 
 // Check session status

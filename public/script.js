@@ -88,6 +88,11 @@ function playGame(gameName) {
     // Clear previous game
     document.getElementById('game-container').innerHTML = '<canvas id="gameCanvas" width="400" height="400"></canvas>';
     
+    // Grant achievement for clicking on dino game
+    if (gameName === 'dino') {
+        grantAchievement('old');
+    }
+    
     // Show mobile controls if on mobile device
     showMobileControls(gameName);
     
@@ -155,6 +160,29 @@ async function submitScore(game, score) {
     } catch (error) {
         console.error('Score submission error:', error);
         showMessage('Failed to submit score!', 'error');
+    }
+}
+
+// Grant achievement function
+async function grantAchievement(achievementName) {
+    try {
+        const response = await fetch(`/api/achievement/${achievementName}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showMessage(data.message, 'success');
+        } else if (response.status === 401) {
+            // User not logged in - don't show error for achievements
+            console.log('User not logged in for achievement');
+        } else {
+            console.error('Achievement error:', data.error);
+        }
+    } catch (error) {
+        console.error('Achievement submission error:', error);
     }
 }
 
@@ -509,7 +537,7 @@ function fakeInstall() {
         'Installing common sense... ERROR: File not found 🧠',
         'Downloading the internet... this might take a while 🌐'
     ];
-    
+    grantAchievement('idiot');
     const message = responses[Math.floor(Math.random() * responses.length)];
     showMessage(message, 'error');
     
