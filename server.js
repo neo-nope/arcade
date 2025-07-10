@@ -48,54 +48,45 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 
-  // Drop old achievements table
-  db.run('DROP TABLE IF EXISTS achievements', (err) => {
+  // Create achievements table with UNIQUE constraint if it doesn't exist
+db.run(`CREATE TABLE IF NOT EXISTS achievements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  achievement_name TEXT NOT NULL,
+  description TEXT,
+  earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users (id),
+  UNIQUE(user_id, achievement_name)
+)`, (err) => {
+  if (err) {
+    console.error('Error creating achievements table:', err);
+    return;
+  }
+  console.log('Achievements table ensured (no drop).');
+
+  // Just in case, delete any duplicates if somehow present (safety net)
+  db.run(`DELETE FROM achievements
+          WHERE id NOT IN (
+            SELECT MIN(id)
+            FROM achievements
+            GROUP BY user_id, achievement_name
+          )`, (err) => {
     if (err) {
-      console.error('Error dropping old achievements table:', err);
+      console.error('Error deleting duplicate achievements:', err);
       return;
     }
-    console.log('Old achievements table dropped.');
+    console.log('Duplicate achievements purged, oldest entry kept.');
 
-    // Create achievements table with UNIQUE constraint
-    db.run(`CREATE TABLE achievements (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      achievement_name TEXT NOT NULL,
-      description TEXT,
-      earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users (id),
-      UNIQUE(user_id, achievement_name)
-    )`, (err) => {
+    // Create UNIQUE INDEX to enforce uniqueness (extra safety)
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_achievements ON achievements(user_id, achievement_name);`, (err) => {
       if (err) {
-        console.error('Error creating achievements table:', err);
+        console.error('Error creating unique index on achievements:', err);
         return;
       }
-      console.log('Achievements table created with UNIQUE constraint.');
-
-      // Just in case, delete any duplicates if somehow present (should be empty now)
-      db.run(`DELETE FROM achievements
-              WHERE id NOT IN (
-                SELECT MIN(id)
-                FROM achievements
-                GROUP BY user_id, achievement_name
-              )`, (err) => {
-        if (err) {
-          console.error('Error deleting duplicate achievements:', err);
-          return;
-        }
-        console.log('Duplicate achievements purged, oldest entry kept.');
-
-        // Create UNIQUE INDEX to enforce uniqueness (extra safety)
-        db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_achievements ON achievements(user_id, achievement_name);`, (err) => {
-          if (err) {
-            console.error('Error creating unique index on achievements:', err);
-            return;
-          }
-          console.log('Unique index on achievements created to prevent duplicates.');
-        });
-      });
+      console.log('Unique index on achievements created to prevent duplicates.');
     });
   });
+});
 });
 
 
