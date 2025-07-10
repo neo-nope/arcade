@@ -416,6 +416,17 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('score-update', data);
   });
 });
+app.get('/health', (req, res) => {
+  // Check database connection by running a quick harmless query
+  db.get('SELECT 1', [], (err) => {
+    if (err) {
+      console.error('💀 Database is unresponsive:', err.message);
+      return res.status(500).json({ status: 'DEAD', error: err.message });
+    }
+
+    res.status(200).json({ status: 'OK', message: 'Still cursed. Still breathing.' });
+  });
+});
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 BROWSERCADE is running on port ${PORT}`);
