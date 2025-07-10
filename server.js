@@ -27,8 +27,8 @@ app.use(session({
 // Initialize SQLite database
 const db = new sqlite3.Database('cursed_arcade.db');
 
-// Create tables
 db.serialize(() => {
+  // Create users table
   db.run(`CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT UNIQUE NOT NULL,
@@ -36,7 +36,8 @@ db.serialize(() => {
     avatar TEXT DEFAULT 'default.png',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
-  
+
+  // Create scores table
   db.run(`CREATE TABLE IF NOT EXISTS scores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -46,16 +47,57 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
-  
-  db.run(`CREATE TABLE IF NOT EXISTS achievements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    achievement_name TEXT NOT NULL,
-    description TEXT,
-    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-  )`);
+
+  // Drop old achievements table
+  db.run('DROP TABLE IF EXISTS achievements', (err) => {
+    if (err) {
+      console.error('Error dropping old achievements table:', err);
+      return;
+    }
+    console.log('Old achievements table dropped.');
+
+    // Create achievements table with UNIQUE constraint
+    db.run(`CREATE TABLE achievements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      achievement_name TEXT NOT NULL,
+      description TEXT,
+      earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users (id),
+      UNIQUE(user_id, achievement_name)
+    )`, (err) => {
+      if (err) {
+        console.error('Error creating achievements table:', err);
+        return;
+      }
+      console.log('Achievements table created with UNIQUE constraint.');
+
+      // Just in case, delete any duplicates if somehow present (should be empty now)
+      db.run(`DELETE FROM achievements
+              WHERE id NOT IN (
+                SELECT MIN(id)
+                FROM achievements
+                GROUP BY user_id, achievement_name
+              )`, (err) => {
+        if (err) {
+          console.error('Error deleting duplicate achievements:', err);
+          return;
+        }
+        console.log('Duplicate achievements purged, oldest entry kept.');
+
+        // Create UNIQUE INDEX to enforce uniqueness (extra safety)
+        db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_achievements ON achievements(user_id, achievement_name);`, (err) => {
+          if (err) {
+            console.error('Error creating unique index on achievements:', err);
+            return;
+          }
+          console.log('Unique index on achievements created to prevent duplicates.');
+        });
+      });
+    });
+  });
 });
+
 
 // Cursed insults for bad players
 const cursedInsults = [
@@ -81,6 +123,8 @@ const achievements = {
   'admin-privilege': { name: 'Admin Privilege', description: 'Username is "admin"', icon: '👑' },
   'old': { name: 'Old', description: 'You clicked on the dino game! Welcome to the prehistoric era!', icon: '🦕' },
   'idiot': { name: 'Idiot', description: 'Just use the website! nobody makes apps these days', icon: '😂🫵' },
+  'clickaholic': { name: 'Clickaholic', description: 'respect for this one', icon: '👇' },
+  
 };
 
 // Routes
@@ -280,29 +324,35 @@ app.get('/api/achievements', (req, res) => {
   );
 });
 
-// Grant achievement (for specific achievements like clicking on dino)
 app.post('/api/achievement/:achievementName', (req, res) => {
   const achievementName = req.params.achievementName;
-  
-  // Check if user is logged in
+
   if (!req.session.userId) {
     return res.status(401).json({ error: 'Not logged in' });
   }
-  
-  // Check if achievement exists
+
   if (!achievements[achievementName]) {
     return res.status(400).json({ error: 'Achievement not found' });
   }
-  
-  // Grant the achievement
-  grantAchievement(req.session.userId, achievementName);
-  
-  res.json({ 
-    success: true, 
-    achievement: achievements[achievementName],
-    message: `Achievement unlocked: ${achievements[achievementName].name}!`
+
+  grantAchievement(req.session.userId, achievementName, (granted, err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to grant achievement' });
+    }
+
+    if (granted) {
+      res.json({ 
+        success: true, 
+        achievement: achievements[achievementName],
+        message: `Achievement unlocked: ${achievements[achievementName].name}!`
+      });
+    } else {
+      // Achievement already earned, do not respond with message
+      res.json({ success: false });
+    }
   });
 });
+
 
 // Check session status
 app.get('/api/session', (req, res) => {
@@ -323,11 +373,35 @@ app.post('/api/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Helper function to grant achievements
-function grantAchievement(userId, achievementName) {
-  db.run('INSERT OR IGNORE INTO achievements (user_id, achievement_name) VALUES (?, ?)', 
-    [userId, achievementName]);
+function grantAchievement(userId, achievementName, callback = () => {}) {
+  db.get('SELECT 1 FROM achievements WHERE user_id = ? AND achievement_name = ?', 
+    [userId, achievementName], (err, row) => {
+      if (err) {
+        console.error('DB error checking achievement:', err);
+        callback(false, err);
+        return;
+      }
+      if (row) {
+        // Already exists
+        callback(false, null);
+        return;
+      }
+      // Grant achievement
+      db.run('INSERT INTO achievements (user_id, achievement_name) VALUES (?, ?)', 
+        [userId, achievementName], (err) => {
+          if (err) {
+            console.error('Failed to grant achievement:', err);
+            callback(false, err);
+          } else {
+            console.log(`Achievement '${achievementName}' granted to user ${userId}`);
+            callback(true, null);
+          }
+        });
+    });
 }
+
+
+
 
 // Socket.io for real-time features
 io.on('connection', (socket) => {

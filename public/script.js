@@ -513,6 +513,7 @@ function addEasterEggListeners() {
     document.addEventListener('click', function() {
         easterEggCounter++;
         if (easterEggCounter === 100) {
+            grantAchievement('clickaholic')
             showMessage('🎉 You clicked 100 times! Achievement unlocked: Clickaholic!', 'success');
         }
     });
