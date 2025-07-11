@@ -12,9 +12,10 @@
     
     <!-- Firebase Configuration -->
     <script type="module">
+        // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
-import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
         
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -30,17 +31,31 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
-// ✅ Enable App Check with reCAPTCHA v3
-const appCheck = initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider('6LdEx38rAAAAAK6jo5EY4m43W2F05vqAEB_5hp8W'),
-  isTokenAutoRefreshEnabled: true
-});
-
+        const db = getFirestore(app);
         
-        // Make Firebase app available globally for other scripts
+        // Make Firebase services available globally
         window.firebaseApp = app;
         window.firebaseAnalytics = analytics;
+        window.firebaseDB = db;
+        window.firebaseFirestoreMethods = {
+            doc,
+            setDoc,
+            getDoc,
+            collection,
+            addDoc,
+            query,
+            where,
+            getDocs,
+            orderBy,
+            limit,
+            serverTimestamp
+        };
+        
+        console.log('🔥 Firebase Client SDK initialized!');
     </script>
+    
+    <!-- Firebase Client-side Operations -->
+    <script src="firebase-client.js"></script>
 </head>
 <body>
     <div class="container">
@@ -80,24 +95,115 @@ const appCheck = initializeAppCheck(app, {
   <button onclick="downloadDB()">Download DB</button>
   <input type="file" id="dbfile" name="dbfile" style="display:none" onchange="uploadDB(event)">
   <button onclick="document.getElementById('dbfile').click()">Upload DB</button>
-  <button onclick="unlockAllAchievements()" class="btn cursed">Unlock All Achievements</button>
+  <button onclick="unlockAllAchievements(event)" class="btn cursed">Unlock All Achievements</button>
 </div>
 
 <script>
-fetch('/api/session')
-  .then(res => res.json())
-  .then(data => {
-    if (data.loggedIn && data.username === 'admin') {
-      document.getElementById('admin-panel').style.display = 'block';
-    }
-  });
+    (function () {
+  const check = () => {
+    const start = performance.now();
+    debugger;
+    const duration = performance.now() - start;
 
+    if (duration > 100) {
+      window.location.href = "/no-peek.html";
+    }
+  };
+
+  setInterval(check, 1000);
+})();
+// Check for admin status when Firebase client is ready
+let adminStatusChecked = false;
+let lastUserStatus = null;
+
+function checkAdminStatus() {
+  if (window.firebaseClient) {
+    const user = window.firebaseClient.getCurrentUser();
+    const userKey = user ? `${user.uid}-${user.username}` : 'no-user';
+    
+    // Only log if user status changed
+    if (lastUserStatus !== userKey) {
+      console.log('User status changed:', user);
+      lastUserStatus = userKey;
+      
+      if (window.firebaseClient.isAdmin()) {
+        console.log('Admin detected, showing admin panel');
+        document.getElementById('admin-panel').style.display = 'block';
+        adminStatusChecked = true;
+      } else {
+        document.getElementById('admin-panel').style.display = 'none';
+      }
+    }
+  }
+}
+
+// Check periodically until admin status is determined
+const adminChecker = setInterval(() => {
+  checkAdminStatus();
+  
+  // Stop checking once we've determined admin status or after 30 seconds
+  if (adminStatusChecked || Date.now() > window.startTime + 30000) {
+    clearInterval(adminChecker);
+  }
+}, 1000);
+
+// Record start time
+window.startTime = Date.now();
+
+// Admin functions (simplified for client-side Firebase)
 function downloadDB() {
-  alert('this feature has been depreceated');
+  alert('Database download not available in client-side Firebase mode');
 }
 
 function uploadDB(event) {
-  alert('this feature has been depreceated');
+  alert('Database upload not available in client-side Firebase mode');
+}
+
+// Unlock all achievements function
+async function unlockAllAchievements() {
+  console.log('Unlock all achievements called');
+  
+  if (!window.firebaseClient) {
+    alert('Firebase client not ready!');
+    return;
+  }
+  
+  const user = window.firebaseClient.getCurrentUser();
+  console.log('Current user for unlock:', user);
+  
+  if (!window.firebaseClient.isAdmin()) {
+    alert('You must be an admin to unlock all achievements!');
+    return;
+  }
+  
+  // Show loading message
+  const button = event.target;
+  const originalText = button.textContent;
+  button.textContent = 'Unlocking...';
+  button.disabled = true;
+  
+  try {
+    console.log('Calling unlockAllAchievements...');
+    const result = await window.firebaseClient.unlockAllAchievements();
+    console.log('Unlock result:', result);
+    
+    if (result.success) {
+      alert('✅ ' + result.message);
+      // Refresh achievements if on achievements page
+      if (window.loadAchievements) {
+        loadAchievements();
+      }
+    } else {
+      alert('❌ ' + (result.error || 'Failed to unlock achievements'));
+    }
+  } catch (error) {
+    console.error('Error unlocking achievements:', error);
+    alert('❌ Error unlocking achievements: ' + error.message);
+  } finally {
+    // Restore button
+    button.textContent = originalText;
+    button.disabled = false;
+  }
 }
 
 </script>

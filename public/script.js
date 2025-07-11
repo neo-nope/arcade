@@ -20,25 +20,29 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 async function initializeApp() {
-    // Check session status from server
-    try {
-        const response = await fetch('/api/session');
-        const sessionData = await response.json();
-        
-        if (sessionData.loggedIn) {
-            currentUser = sessionData.username;
-            localStorage.setItem('currentUser', currentUser);
-            showUserPanel();
-        } else {
-            currentUser = null;
-            localStorage.removeItem('currentUser');
+    // Wait for Firebase client to be ready
+    const waitForFirebaseClient = () => {
+        return new Promise((resolve) => {
+            const checkClient = () => {
+                if (window.firebaseClient && window.firebaseClient.auth) {
+                    resolve();
+                } else {
+                    setTimeout(checkClient, 100);
+                }
+            };
+            checkClient();
+        });
+    };
+    
+    await waitForFirebaseClient();
+    
+    // Firebase will handle auth state changes automatically
+    // Just need to wait a moment for the auth state to be determined
+    setTimeout(() => {
+        if (!window.firebaseClient.currentUser) {
             showLoginForm();
         }
-    } catch (error) {
-        console.log('Session check failed, assuming not logged in');
-        currentUser = null;
-        showLoginForm();
-    }
+    }, 1000);
     
     // Start insult ticker
     startInsultTicker();
@@ -127,13 +131,7 @@ function playGame(gameName) {
 // Score submission function
 async function submitScore(game, score) {
     try {
-        const response = await fetch('/api/score', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ game, score })
-        });
-        
-        const data = await response.json();
+        const data = await window.firebaseClient.submitScore(game, score);
         
         if (data.success) {
             let message = `Score saved! Rank: #${data.rank}`;
@@ -141,7 +139,7 @@ async function submitScore(game, score) {
                 message += ` - ${data.insult}`;
             }
             showMessage(message, data.rank <= 10 ? 'success' : 'error');
-        } else if (response.status === 401) {
+        } else if (data.error === 'You must be logged in to submit scores!') {
             // User not logged in
             showMessage('💀 Create an account to save your shameful scores!', 'error');
             showMessage('🎮 Click "Account" to register and preserve your failure!', 'error');
@@ -169,20 +167,13 @@ async function submitScore(game, score) {
 // Grant achievement function
 async function grantAchievement(achievementName) {
     try {
-        const response = await fetch(`/api/achievement/${achievementName}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        const data = await response.json();
+        const data = await window.firebaseClient.grantAchievement(achievementName);
         
         if (data.success) {
             showMessage(data.message, 'success');
-        } else if (response.status === 401) {
-            // User not logged in - don't show error for achievements
-            console.log('User not logged in for achievement');
         } else {
-            console.error('Achievement error:', data.error);
+            // Achievement already earned or user not logged in - don't show error
+            console.log('Achievement not granted:', achievementName);
         }
     } catch (error) {
         console.error('Achievement submission error:', error);
@@ -267,19 +258,15 @@ async function login() {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
     
+    if (!username || !password) {
+        showMessage('Please enter both username and password!', 'error');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        const data = await response.json();
+        const data = await window.firebaseClient.login(username, password);
         
         if (data.success) {
-            currentUser = username;
-            localStorage.setItem('currentUser', username);
-            showUserPanel();
             showMessage(data.message, 'success');
         } else {
             showMessage(data.error, 'error');
@@ -293,19 +280,15 @@ async function register() {
     const username = document.getElementById('register-username').value;
     const password = document.getElementById('register-password').value;
     
+    if (!username || !password) {
+        showMessage('Please fill in all fields!', 'error');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-        });
-        
-        const data = await response.json();
+        const data = await window.firebaseClient.register(username, password);
         
         if (data.success) {
-            currentUser = username;
-            localStorage.setItem('currentUser', username);
-            showUserPanel();
             showMessage(data.message, 'success');
         } else {
             showMessage(data.error, 'error');
@@ -315,19 +298,23 @@ async function register() {
     }
 }
 
-function logout() {
-    fetch('/api/logout', { method: 'POST' });
-    currentUser = null;
-    localStorage.removeItem('currentUser');
-    showLoginForm();
-    showMessage('Logged out successfully!', 'success');
+async function logout() {
+    try {
+        await window.firebaseClient.logout();
+        showMessage('Logged out successfully!', 'success');
+        // Firebase will automatically trigger the auth state change
+    } catch (error) {
+        showMessage('Logout failed!', 'error');
+    }
 }
 
 function showUserPanel() {
     document.getElementById('login-form').style.display = 'none';
     document.getElementById('user-panel').style.display = 'block';
-    document.getElementById('username-display').textContent = currentUser;
-    document.getElementById('user-status').textContent = `Welcome back, ${currentUser}! 🎮`;
+    const user = window.firebaseClient ? window.firebaseClient.getCurrentUser() : null;
+    const username = user ? user.username : 'Unknown';
+    document.getElementById('username-display').textContent = username;
+    document.getElementById('user-status').textContent = `Welcome back, ${username}! 🎮`;
 }
 
 function showLoginForm() {
@@ -339,8 +326,7 @@ function showLoginForm() {
 // Leaderboard
 async function loadLeaderboard(game) {
     try {
-        const response = await fetch(`/api/leaderboard/${game}`);
-        const data = await response.json();
+        const data = await window.firebaseClient.getLeaderboard(game);
         
         let html = `<div class="leaderboard-header">
             <h3>🏆 ${game.toUpperCase()} Hall of Shame</h3>
@@ -366,7 +352,9 @@ async function loadLeaderboard(game) {
                 <tbody>`;
             
             data.forEach((entry, index) => {
-                const isCurrentUser = currentUser && entry.username === currentUser;
+                const user = window.firebaseClient ? window.firebaseClient.getCurrentUser() : null;
+                const currentUsername = user ? user.username : null;
+                const isCurrentUser = currentUsername && entry.username === currentUsername;
                 const rankClass = `rank-${Math.min(entry.rank, 3)}`;
                 const userClass = isCurrentUser ? 'current-user' : '';
                 
@@ -388,13 +376,15 @@ async function loadLeaderboard(game) {
             html += `</tbody></table>`;
             
             // Add current user's stats if not in top 10
-            if (currentUser) {
-                const userInList = data.find(entry => entry.username === currentUser);
+            const user = window.firebaseClient ? window.firebaseClient.getCurrentUser() : null;
+            const currentUsername = user ? user.username : null;
+            if (currentUsername) {
+                const userInList = data.find(entry => entry.username === currentUsername);
                 if (!userInList) {
                     html += `<div class="user-stats">
                         <h4>📊 Your Pathetic Stats</h4>
                         <p>💀 Not even in the top 10... How embarrassing!</p>
-                        <p>🎮 Keep trying, ${currentUser}!</p>
+                        <p>🎮 Keep trying, ${currentUsername}!</p>
                     </div>`;
                 }
             }
@@ -409,8 +399,7 @@ async function loadLeaderboard(game) {
 // Achievements
 async function loadAchievements() {
     try {
-        const response = await fetch('/api/achievements');
-        const data = await response.json();
+        const data = await window.firebaseClient.getUserAchievements();
         
         let html = '<div class="achievements-grid">';
         
@@ -418,11 +407,14 @@ async function loadAchievements() {
             html += '<p>No achievements yet. Play some games to unlock them!</p>';
         } else {
             data.forEach(achievement => {
+                const earnedDate = achievement.earned_at ? 
+                    new Date(achievement.earned_at.seconds * 1000).toLocaleDateString() : 
+                    'Unknown';
                 html += `<div class="achievement-card">
                     <div class="achievement-icon">${achievement.icon}</div>
                     <h4>${achievement.name}</h4>
                     <p>${achievement.description}</p>
-                    <small>Earned: ${new Date(achievement.earned_at).toLocaleDateString()}</small>
+                    <small>Earned: ${earnedDate}</small>
                 </div>`;
             });
         }

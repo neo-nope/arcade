@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>BROWSECADE - The World's Most Cursed Arcade</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💀</text></svg>">
+    
+    <!-- Firebase Configuration -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDztsr7sMfK_NB9vgoo20lpo2qtxibg9hE",
+            authDomain: "browsecade.firebaseapp.com",
+            projectId: "browsecade",
+            storageBucket: "browsecade.firebasestorage.app",
+            messagingSenderId: "435812374418",
+            appId: "1:435812374418:web:293d10ff1916288e69134b",
+            measurementId: "G-64322TN7CV"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+        
+        // Make Firebase services available globally
+        window.firebaseApp = app;
+        window.firebaseAnalytics = analytics;
+        window.firebaseDB = db;
+        window.firebaseFirestoreMethods = {
+            doc,
+            setDoc,
+            getDoc,
+            collection,
+            addDoc,
+            query,
+            where,
+            getDocs,
+            orderBy,
+            limit,
+            serverTimestamp
+        };
+        
+        console.log('🔥 Firebase Client SDK initialized!');
+    </script>
+    
+    <!-- Firebase Client-side Operations -->
+    <script src="firebase-client.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="title-bar">
+                <div class="title-bar-text">
+                    <span class="skull">💀</span> BROWSECADE <span class="skull">💀</span>
+                </div>
+                <div class="title-bar-controls">
+                    <button class="title-bar-control" onclick="minimizeWindow()">_</button>
+                    <button class="title-bar-control" onclick="maximizeWindow()">□</button>
+                    <button class="title-bar-control close" onclick="closeWindow()">×</button>
+                </div>
+            </div>
+            <div class="subtitle">The world's most cursed retro arcade... in your browser!</div>
+            <span id="user-status">Welcome, Nameless Gremlin!</span>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="toolbar">
+            
+        </nav>
+
+        <!-- User Status -->
+         
+        <div class="status-bar">
+            
+            <span id="insult-ticker" class="insult-ticker"></span>
+        </div>
+        <div id="admin-panel" style="display: none;">
+</div>
+
+
+        <!-- Games Section -->
+        <div id="games-section" class="section active">
+            <h1>don't peek</h1>
+            <h2>we have some dev stuff there</h2>
+        </div>
+
+        <!-- Messages -->
+        <div id="message-container" class="message-container"></div>
+        
+        <!-- Mobile Touch Controls -->
+        <div id="mobile-controls" class="mobile-controls">
+            <div class="direction-pad">
+                <div></div>
+                <button class="control-btn" id="up-btn">↑</button>
+                <div></div>
+                <button class="control-btn" id="left-btn">←</button>
+                <div></div>
+                <button class="control-btn" id="right-btn">→</button>
+                <div></div>
+                <button class="control-btn" id="down-btn">↓</button>
+                <div></div>
+            </div>
+            <div class="action-buttons">
+                <button class="control-btn" id="action-btn">🎮</button>
+                <button class="control-btn" id="jump-btn">🚀</button>
+            </div>
+        </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="games/snake.js"></script>
+    <script src="games/tetris.js"></script>
+    <script src="games/dino.js"></script>
+    <script src="games/2048.js"></script>
+    <script src="games/flappy.js"></script>
+    <script src="games/rigged.js"></script>
+    <script src="games/pong.js"></script>
+</body>
+</html>
