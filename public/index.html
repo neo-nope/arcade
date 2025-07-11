@@ -12,9 +12,9 @@
     
     <!-- Firebase Configuration -->
     <script type="module">
-        // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app-check.js";
         
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -30,6 +30,12 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
+// ✅ Enable App Check with reCAPTCHA v3
+const appCheck = initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('6LdEx38rAAAAAK6jo5EY4m43W2F05vqAEB_5hp8W'),
+  isTokenAutoRefreshEnabled: true
+});
+
         
         // Make Firebase app available globally for other scripts
         window.firebaseApp = app;
