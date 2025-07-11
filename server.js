@@ -306,7 +306,7 @@ app.post('/admin/upload-db', upload.single('dbfile'), (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded');
 
   const tempPath = req.file.path; // Where Multer saved the uploaded file
-  const cursedPath = path.resolve('/absolute/path/to/cursed_arcade.db'); // your real DB path
+  const cursedPath = path.join(__dirname, 'cursed_arcade.db'); // your real DB path
 
   // Move & overwrite
   fs.rename(tempPath, cursedPath, (err) => {
