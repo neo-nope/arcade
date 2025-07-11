@@ -1,5 +1,6 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+const simpleGit = require('simple-git');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const bodyParser = require('body-parser');
@@ -302,22 +303,27 @@ app.get('/admin/download-db', (req, res) => {
   res.download(filePath, 'cursed_arcade.db');
 });
 
+const git = simpleGit();
+
+async function commitAndPushDbUpdate() {
+  try {
+    const dbFile = 'cursed_arcade.db'; // replace with your .db file name
+
+    await git.add(dbFile);
+    await git.commit(`Update ${dbFile} - ${new Date().toISOString()}`);
+    await git.push(); // change branch name if not 'main'
+
+    console.log('DB file committed and pushed successfully!');
+  } catch (err) {
+    console.error('Failed to push DB update:', err);
+  }
+}
+
 app.post('/admin/upload-db', upload.single('dbfile'), (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded');
 
-  const tempPath = req.file.path; // Where Multer saved the uploaded file
-  const cursedPath = path.join(__dirname, 'cursed_arcade.db'); // your real DB path
-
-  // Move & overwrite
-  fs.rename(tempPath, cursedPath, (err) => {
-    if (err) {
-      console.error('Failed to overwrite cursed DB:', err);
-      return res.status(500).send('Failed to overwrite cursed DB');
-    }
-    res.send('Cursed DB overwritten successfully, chaos unleashed!');
-  });
-});
-
+    commitAndPushDbUpdate();
+    });
 // Socket.IO events
 io.on('connection', (socket) => {
   console.log('A cursed soul connected');
