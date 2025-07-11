@@ -1,3 +1,5 @@
+require('dotenv').config(); // Load environment variables
+
 const express = require('express');
 const admin = require('firebase-admin');
 const bcrypt = require('bcryptjs');
@@ -18,7 +20,7 @@ app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
-  secret: 'cursed-arcade-secret-key',
+  secret: process.env.SESSION_SECRET || 'cursed-arcade-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: { secure: false }
@@ -30,18 +32,35 @@ let firestoreEnabled = true;
 let db, usersCollection, scoresCollection, achievementsCollection;
 
 try {
-  serviceAccount = require('./firebase-service-account.json');
-  
-  // Test if credentials are valid by checking if private key is not dummy
-  if (serviceAccount.private_key_id === 'dummy' || serviceAccount.private_key === '-----BEGIN PRIVATE KEY-----\nDUMMY\n-----END PRIVATE KEY-----\n') {
-    throw new Error('Dummy credentials detected');
+  // Check if we have environment variables for Firebase config
+  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+    // Use environment variables
+    serviceAccount = {
+      type: 'service_account',
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Fix newlines
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      client_id: process.env.FIREBASE_CLIENT_ID,
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://oauth2.googleapis.com/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+      client_x509_cert_url: process.env.FIREBASE_CLIENT_X509_CERT_URL,
+    };
+  } else {
+    // Fallback to service account file
+    serviceAccount = require('./firebase-service-account.json');
+    
+    // Test if credentials are valid by checking if private key is not dummy
+    if (serviceAccount.private_key_id === 'dummy' || serviceAccount.private_key === '-----BEGIN PRIVATE KEY-----\nDUMMY\n-----END PRIVATE KEY-----\n') {
+      throw new Error('Dummy credentials detected');
+    }
   }
   
-  // Try to initialize Firebase (removed temporary fallback)
-  
+  // Try to initialize Firebase
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    projectId: process.env.FIREBASE_PROJECT_ID || 'browsecade'
+    projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id || 'browsecade'
   });
   
   db = admin.firestore();
@@ -609,5 +628,7 @@ app.get('/health', async (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🎮 BROWSERCADE is running on port ${PORT}`);
   console.log(`💀 Prepare for maximum cursed-ness!`);
+  console.log(`🔥 Firebase mode: ${firestoreEnabled ? 'Enabled' : 'Fallback (In-Memory)'}`);
+  console.log(`🔐 Session secret: ${process.env.SESSION_SECRET ? 'From environment' : 'Using default'}`);
 });
 
