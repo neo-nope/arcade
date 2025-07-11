@@ -1,11 +1,241 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>BROWSECADE - The World's Most Cursed Arcade</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💀</text></svg>">
 </head>
 <body>
-    <h1>PLEASE WAIT</h1>
-    <h2>we're migrating to a different db system</h2>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="title-bar">
+                <div class="title-bar-text">
+                    <span class="skull">💀</span> BROWSECADE <span class="skull">💀</span>
+                </div>
+                <div class="title-bar-controls">
+                    <button class="title-bar-control" onclick="minimizeWindow()">_</button>
+                    <button class="title-bar-control" onclick="maximizeWindow()">□</button>
+                    <button class="title-bar-control close" onclick="closeWindow()">×</button>
+                </div>
+            </div>
+            <div class="subtitle">The world's most cursed retro arcade... in your browser!</div>
+            <span id="user-status">Welcome, Nameless Gremlin!</span>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="toolbar">
+            <button class="btn" onclick="showSection('games')">🎮 Games</button>
+            <button class="btn" onclick="showSection('leaderboard')">🏆 Leaderboard</button>
+            <button class="btn" onclick="showSection('achievements')">🏅 Achievements</button>
+            <button class="btn cursed" onclick="showSection('account')">👤 Account</button>
+            <button class="btn danger" onclick="fakeInstall()">💿 Install to Desktop</button>
+        </nav>
+
+        <!-- User Status -->
+         
+        <div class="status-bar">
+            
+            <span id="insult-ticker" class="insult-ticker"></span>
+        </div>
+        <div id="admin-panel" style="display: none;">
+  <h3>Admin Panel 👑</h3>
+  <button onclick="downloadDB()">Download DB</button>
+  <input type="file" id="dbfile" name="dbfile" style="display:none" onchange="uploadDB(event)">
+  <button onclick="document.getElementById('dbfile').click()">Upload DB</button>
+</div>
+
+<script>
+fetch('/api/session')
+  .then(res => res.json())
+  .then(data => {
+    if (data.loggedIn && data.username === 'admin') {
+      document.getElementById('admin-panel').style.display = 'block';
+    }
+  });
+
+function downloadDB() {
+  window.location.href = '/admin/download-db';
+}
+
+function uploadDB(event) {
+  const file = event.target.files[0];
+  const formData = new FormData();
+  formData.append('dbfile', file); // must match multer field
+
+  fetch('/admin/upload-db', {
+    method: 'POST',
+    body: formData
+  }).then(res => {
+    if (res.ok) {
+      alert('Upload successful!');
+    } else {
+      alert('Upload failed!');
+    }
+  });
+}
+
+</script>
+
+        <!-- Games Section -->
+        <div id="games-section" class="section active">
+            <h2>🎮 Choose Your Doom</h2>
+            <div class="games-grid">
+                <div class="game-card" onclick="playGame('snake')">
+                    <div class="game-icon">🐍</div>
+                    <h3>Snake</h3>
+                    <p>Eat yourself to death!</p>
+                    <div class="difficulty">Difficulty: Easy</div>
+                </div>
+                
+                <!--<div class="game-card" onclick="playGame('tetris')">
+                    <div class="game-icon">🧩</div>
+                    <h3>Tetris</h3>
+                    <p>Stack your failures!</p>
+                    <div class="difficulty">Difficulty: Medium</div>
+                </div> 
+                
+                TO DO: FIX TETRIS
+                -->
+                
+                <div class="game-card" onclick="playGame('dino')">
+                    <div class="game-icon">🦕</div>
+                    <h3>Dino Run</h3>
+                    <p>Extinct before you start!</p>
+                    <div class="difficulty">Difficulty: Easy</div>
+                </div>
+                
+                <div class="game-card" onclick="playGame('2048')">
+                    <div class="game-icon">🔢</div>
+                    <h3>2048</h3>
+                    <p>Math is hard!</p>
+                    <div class="difficulty">Difficulty: Hard</div>
+                </div>
+                
+                <div class="game-card" onclick="playGame('flappy')">
+                    <div class="game-icon">🐦</div>
+                    <h3>Flappy Bird</h3>
+                    <p>Gravity wins every time!</p>
+                    <div class="difficulty">Difficulty: Impossible</div>
+                </div>
+                
+                <div class="game-card cursed" onclick="playGame('rigged')">
+                    <div class="game-icon">🎲</div>
+                    <h3>Roulette</h3>
+                    <p>Test your luck!</p>
+                    <div class="difficulty">Difficulty: Totally Not Rigged</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboard Section -->
+        <div id="leaderboard-section" class="section">
+            <h2>🏆 Hall of Shame</h2>
+            <div class="game-selector">
+                <button class="btn" onclick="loadLeaderboard('snake')">Snake</button>
+                <!--<button class="btn" onclick="loadLeaderboard('tetris')">Tetris</button>-->
+                <button class="btn" onclick="loadLeaderboard('dino')">Dino</button>
+                <button class="btn" onclick="loadLeaderboard('2048')">2048</button>
+                <button class="btn" onclick="loadLeaderboard('flappy')">Flappy</button>
+                <button class="btn" onclick="loadLeaderboard('rigged')">Roulette</button>
+            </div>
+            <div id="leaderboard-content">
+                <p>Select a game to see who's less terrible than you!</p>
+            </div>
+        </div>
+
+        <!-- Achievements Section -->
+        <div id="achievements-section" class="section">
+            <h2>🏅 Your Pathetic Achievements</h2>
+            <div id="achievements-content">
+                <p>Play some games to unlock achievements... if you can!</p>
+            </div>
+        </div>
+
+        <!-- Account Section -->
+        <div id="account-section" class="section">
+            <h2>👤 Account Settings</h2>
+            <div id="login-form" class="form-container">
+                <div class="form-tabs">
+                    <button class="tab-btn active" onclick="showTab('login')">Login</button>
+                    <button class="tab-btn" onclick="showTab('register')">Register</button>
+                </div>
+                
+                <div id="login-tab" class="tab-content active">
+                    <h3>Login to Save Your Shame</h3>
+                    <input type="text" id="login-username" placeholder="Username" class="input">
+                    <input type="password" id="login-password" placeholder="Password" class="input">
+                    <button class="btn" onclick="login()">Login</button>
+                </div>
+                
+                <div id="register-tab" class="tab-content">
+                    <h3>Register Your Doom</h3>
+                    <input type="text" id="register-username" placeholder="Username" class="input">
+                    <input type="password" id="register-password" placeholder="Password" class="input">
+                    <button class="btn" onclick="register()">Register</button>
+                </div>
+            </div>
+            
+            <div id="user-panel" class="form-container" style="display: none;">
+                <h3>Welcome to Hell</h3>
+                <p>Logged in as: <span id="username-display"></span></p>
+                <button class="btn danger" onclick="logout()">Escape</button>
+            </div>
+        </div>
+
+        <!-- Game Modal -->
+        <div id="game-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="game-title">Game</h3>
+                    <button class="close-btn" onclick="closeGame()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="game-container"></div>
+                    <div class="game-controls">
+                        <button class="btn" onclick="restartGame()">🔄 Restart</button>
+                        <button class="btn" onclick="closeGame()">🚪 Give Up</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="message-container" class="message-container"></div>
+        
+        <!-- Mobile Touch Controls -->
+        <div id="mobile-controls" class="mobile-controls">
+            <div class="direction-pad">
+                <div></div>
+                <button class="control-btn" id="up-btn">↑</button>
+                <div></div>
+                <button class="control-btn" id="left-btn">←</button>
+                <div></div>
+                <button class="control-btn" id="right-btn">→</button>
+                <div></div>
+                <button class="control-btn" id="down-btn">↓</button>
+                <div></div>
+            </div>
+            <div class="action-buttons">
+                <button class="control-btn" id="action-btn">🎮</button>
+                <button class="control-btn" id="jump-btn">🚀</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+    <script src="games/snake.js"></script>
+    <script src="games/tetris.js"></script>
+    <script src="games/dino.js"></script>
+    <script src="games/2048.js"></script>
+    <script src="games/flappy.js"></script>
+    <script src="games/rigged.js"></script>
 </body>
 </html>
