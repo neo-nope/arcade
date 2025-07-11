@@ -24,44 +24,129 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK with fallback
 let serviceAccount;
+let firestoreEnabled = true;
+let db, usersCollection, scoresCollection, achievementsCollection;
+
 try {
   serviceAccount = require('./firebase-service-account.json');
-} catch (error) {
-  console.error('🚨 Firebase service account file not found!');
-  console.error('Please create firebase-service-account.json with your Firebase credentials.');
-  console.error('Using default configuration for now...');
   
-  // Fallback configuration - this will fail but allows server to start
-  serviceAccount = {
-    "type": "service_account",
-    "project_id": "browsecade",
-    "private_key_id": "dummy",
-    "private_key": "-----BEGIN PRIVATE KEY-----\nDUMMY\n-----END PRIVATE KEY-----\n",
-    "client_email": "dummy@browsecade.iam.gserviceaccount.com",
-    "client_id": "dummy",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dummy@browsecade.iam.gserviceaccount.com"
+  // Test if credentials are valid by checking if private key is not dummy
+  if (serviceAccount.private_key_id === 'dummy' || serviceAccount.private_key === '-----BEGIN PRIVATE KEY-----\nDUMMY\n-----END PRIVATE KEY-----\n') {
+    throw new Error('Dummy credentials detected');
+  }
+  
+  // Try to initialize Firebase (removed temporary fallback)
+  
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    projectId: process.env.FIREBASE_PROJECT_ID || 'browsecade'
+  });
+  
+  db = admin.firestore();
+  
+  // Firestore collections
+  usersCollection = db.collection('users');
+  scoresCollection = db.collection('scores');
+  achievementsCollection = db.collection('achievements');
+  
+  console.log('✅ Firebase Firestore initialized successfully!');
+  console.log('✅ Collections ready: users, scores, achievements');
+} catch (error) {
+  firestoreEnabled = false;
+  console.error('❌ Firebase initialization failed:', error.message);
+  console.error('🔄 Running in fallback mode - using in-memory storage');
+  console.error('⚠️  Data will not persist between server restarts');
+  
+  // In-memory storage fallback
+  const inMemoryStorage = {
+    users: new Map(),
+    scores: [],
+    achievements: new Map(),
+    nextId: 1
   };
+  
+  // Mock Firestore-like interface
+  db = {
+    collection: (name) => {
+      return {
+        add: async (data) => {
+          const id = 'doc_' + inMemoryStorage.nextId++;
+          if (name === 'users') {
+            inMemoryStorage.users.set(id, { id, ...data });
+          } else if (name === 'scores') {
+            inMemoryStorage.scores.push({ id, ...data });
+          } else if (name === 'achievements') {
+            inMemoryStorage.achievements.set(id, { id, ...data });
+          }
+          return { id };
+        },
+        where: (field, op, value) => {
+          return {
+            get: async () => {
+              const docs = [];
+              if (name === 'users') {
+                for (const [id, user] of inMemoryStorage.users) {
+                  if (user[field] === value) {
+                    docs.push({ id, data: () => user });
+                  }
+                }
+              } else if (name === 'achievements') {
+                for (const [id, achievement] of inMemoryStorage.achievements) {
+                  if (achievement[field] === value) {
+                    docs.push({ id, data: () => achievement });
+                  }
+                }
+              }
+              return { docs, empty: docs.length === 0 };
+            },
+            orderBy: () => {
+              return {
+                get: async () => {
+                  const docs = [];
+                  if (name === 'achievements') {
+                    for (const [id, achievement] of inMemoryStorage.achievements) {
+                      if (achievement[field] === value) {
+                        docs.push({ id, data: () => achievement });
+                      }
+                    }
+                  }
+                  return { docs, empty: docs.length === 0 };
+                }
+              };
+            }
+          };
+        },
+        get: async () => {
+          const docs = [];
+          if (name === 'scores') {
+            docs.push(...inMemoryStorage.scores.map(score => ({
+              id: score.id,
+              data: () => score
+            })));
+          }
+          return { docs, size: docs.length };
+        },
+        doc: () => {
+          return {
+            get: async () => ({ exists: false })
+          };
+        },
+        batch: () => {
+          return {
+            set: () => {},
+            commit: async () => {}
+          };
+        }
+      };
+    }
+  };
+  
+  usersCollection = db.collection('users');
+  scoresCollection = db.collection('scores');
+  achievementsCollection = db.collection('achievements');
 }
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: process.env.FIREBASE_PROJECT_ID || 'browsecade'
-});
-
-const db = admin.firestore();
-
-// Firestore collections
-const usersCollection = db.collection('users');
-const scoresCollection = db.collection('scores');
-const achievementsCollection = db.collection('achievements');
-
-console.log('Firebase Firestore initialized successfully!');
-console.log('Collections ready: users, scores, achievements');
 
 // Cursed insults for bad players
 const cursedInsults = [
@@ -370,18 +455,29 @@ app.post('/api/unlock-all', async (req, res) => {
     }
     
     // Create batch write for new achievements
-    const batch = db.batch();
-    
-    achievementsToUnlock.forEach(achievementName => {
-      const achievementRef = achievementsCollection.doc();
-      batch.set(achievementRef, {
-        user_id: req.session.userId,
-        achievement_name: achievementName,
-        earned_at: admin.firestore.FieldValue.serverTimestamp()
+    if (firestoreEnabled) {
+      const batch = db.batch();
+      
+      achievementsToUnlock.forEach(achievementName => {
+        const achievementRef = achievementsCollection.doc();
+        batch.set(achievementRef, {
+          user_id: req.session.userId,
+          achievement_name: achievementName,
+          earned_at: admin.firestore.FieldValue.serverTimestamp()
+        });
       });
-    });
-    
-    await batch.commit();
+      
+      await batch.commit();
+    } else {
+      // Fallback mode - add achievements individually
+      for (const achievementName of achievementsToUnlock) {
+        await achievementsCollection.add({
+          user_id: req.session.userId,
+          achievement_name: achievementName,
+          earned_at: new Date()
+        });
+      }
+    }
     
     console.log(`Admin unlocked ${achievementsToUnlock.length} achievements`);
     res.json({ 
@@ -457,11 +553,13 @@ async function grantAchievement(userId, achievementName, callback = () => {}) {
     }
 
     // Grant achievement
-    await achievementsCollection.add({
+    const achievementData = {
       user_id: userId,
       achievement_name: achievementName,
-      earned_at: admin.firestore.FieldValue.serverTimestamp()
-    });
+      earned_at: firestoreEnabled ? admin.firestore.FieldValue.serverTimestamp() : new Date()
+    };
+    
+    await achievementsCollection.add(achievementData);
 
     console.log(`Achievement '${achievementName}' granted to user ${userId}`);
     callback(true, null);
@@ -489,12 +587,22 @@ io.on('connection', (socket) => {
 
 app.get('/health', async (req, res) => {
   try {
-    // Check Firestore connection by running a quick harmless query
+    // Check database connection
     await db.collection('health').doc('test').get();
-    res.status(200).json({ status: 'OK', message: 'Still cursed. Still breathing.' });
+    
+    res.status(200).json({ 
+      status: 'OK', 
+      message: 'Still cursed. Still breathing.',
+      database: firestoreEnabled ? 'Firestore' : 'In-Memory (Fallback)',
+      persistent: firestoreEnabled
+    });
   } catch (error) {
-    console.error('💀 Firestore is unresponsive:', error.message);
-    res.status(500).json({ status: 'DEAD', error: error.message });
+    console.error('💀 Database is unresponsive:', error.message);
+    res.status(500).json({ 
+      status: 'DEAD', 
+      error: error.message,
+      database: firestoreEnabled ? 'Firestore' : 'In-Memory (Fallback)'
+    });
   }
 });
 

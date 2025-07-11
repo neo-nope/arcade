@@ -87,24 +87,11 @@ fetch('/api/session')
   });
 
 function downloadDB() {
-  window.location.href = '/admin/download-db';
+  alert('this feature has been depreceated');
 }
 
 function uploadDB(event) {
-  const file = event.target.files[0];
-  const formData = new FormData();
-  formData.append('dbfile', file); // must match multer field
-
-  fetch('/admin/upload-db', {
-    method: 'POST',
-    body: formData
-  }).then(res => {
-    if (res.ok) {
-      alert('Upload successful!');
-    } else {
-      alert('Upload failed!');
-    }
-  });
+  alert('this feature has been depreceated');
 }
 
 </script>
