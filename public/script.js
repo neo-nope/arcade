@@ -116,6 +116,9 @@ function playGame(gameName) {
         case 'rigged':
             startRiggedGame();
             break;
+        case 'pong':
+            startPongGame();
+            break;
         default:
             document.getElementById('game-container').innerHTML = '<p>Game not implemented yet! 💀</p>';
     }
@@ -193,7 +196,8 @@ function getGameTitle(gameName) {
         'dino': '🦕 Dino Run - Extinct Before You Start',
         '2048': '🔢 2048 - Math is Hard',
         'flappy': '🐦 Flappy Bird - Gravity Always Wins',
-        'rigged': '🎲 Rigged Roulette - The House Always Wins'
+        'rigged': '🎲 Rigged Roulette - The House Always Wins',
+        'pong': '🏓 Pong - Classic Arcade Action'
     };
     return titles[gameName] || 'Unknown Game';
 }
@@ -551,6 +555,34 @@ function fakeInstall() {
             showMessage('Installation failed successfully! Just like your life! 💀', 'error');
         }
     }, 200);
+}
+
+// Admin function to unlock all achievements
+function unlockAllAchievements() {
+    fetch('/api/unlock-all', {
+        method: 'POST'
+    }).then(res => {
+        if (!res.ok) {
+            if (res.status === 404) {
+                throw new Error('Endpoint not found. Server may need restart.');
+            } else if (res.status === 403) {
+                throw new Error('Access denied. You must be logged in as admin.');
+            } else {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+        }
+        return res.json();
+    }).then(data => {
+        if (data.success) {
+            showMessage('All achievements unlocked! 🏆', 'success');
+            loadAchievements(); // Refresh achievements display
+        } else {
+            showMessage('Failed to unlock achievements: ' + (data.error || 'Unknown error'), 'error');
+        }
+    }).catch(error => {
+        console.error('Error unlocking achievements:', error);
+        showMessage('Error unlocking achievements: ' + error.message, 'error');
+    });
 }
 
 // Window controls (fake)

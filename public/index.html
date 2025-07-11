@@ -9,6 +9,32 @@
     <title>BROWSECADE - The World's Most Cursed Arcade</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💀</text></svg>">
+    
+    <!-- Firebase Configuration -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDztsr7sMfK_NB9vgoo20lpo2qtxibg9hE",
+            authDomain: "browsecade.firebaseapp.com",
+            projectId: "browsecade",
+            storageBucket: "browsecade.firebasestorage.app",
+            messagingSenderId: "435812374418",
+            appId: "1:435812374418:web:293d10ff1916288e69134b",
+            measurementId: "G-64322TN7CV"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        
+        // Make Firebase app available globally for other scripts
+        window.firebaseApp = app;
+        window.firebaseAnalytics = analytics;
+    </script>
 </head>
 <body>
     <div class="container">
@@ -48,6 +74,7 @@
   <button onclick="downloadDB()">Download DB</button>
   <input type="file" id="dbfile" name="dbfile" style="display:none" onchange="uploadDB(event)">
   <button onclick="document.getElementById('dbfile').click()">Upload DB</button>
+  <button onclick="unlockAllAchievements()" class="btn cursed">Unlock All Achievements</button>
 </div>
 
 <script>
@@ -123,13 +150,20 @@ function uploadDB(event) {
                     <p>Gravity wins every time!</p>
                     <div class="difficulty">Difficulty: Impossible</div>
                 </div>
-                
+                <div class="game-card" onclick="playGame('pong')">
+                    <div class="game-icon">🏓</div>
+                    <h3>Pong</h3>
+                    <p>Classic arcade action!</p>
+                    <div class="difficulty">Difficulty: Nostalgic</div>
+                </div>
                 <div class="game-card cursed" onclick="playGame('rigged')">
                     <div class="game-icon">🎲</div>
                     <h3>Roulette</h3>
                     <p>Test your luck!</p>
                     <div class="difficulty">Difficulty: Totally Not Rigged</div>
                 </div>
+                
+                
             </div>
         </div>
 
@@ -142,7 +176,9 @@ function uploadDB(event) {
                 <button class="btn" onclick="loadLeaderboard('dino')">Dino</button>
                 <button class="btn" onclick="loadLeaderboard('2048')">2048</button>
                 <button class="btn" onclick="loadLeaderboard('flappy')">Flappy</button>
+                <button class="btn" onclick="loadLeaderboard('pong')">Pong</button>
                 <button class="btn" onclick="loadLeaderboard('rigged')">Roulette</button>
+                
             </div>
             <div id="leaderboard-content">
                 <p>Select a game to see who's less terrible than you!</p>
@@ -227,8 +263,6 @@ function uploadDB(event) {
             </div>
         </div>
     </div>
-
-    <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
     <script src="games/snake.js"></script>
@@ -237,5 +271,6 @@ function uploadDB(event) {
     <script src="games/2048.js"></script>
     <script src="games/flappy.js"></script>
     <script src="games/rigged.js"></script>
+    <script src="games/pong.js"></script>
 </body>
 </html>
