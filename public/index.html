@@ -43,6 +43,44 @@
             
             <span id="insult-ticker" class="insult-ticker"></span>
         </div>
+        <div id="admin-panel" style="display: none;">
+  <h3>Admin Panel 👑</h3>
+  <button onclick="downloadDB()">Download DB</button>
+  <input type="file" id="dbfile" name="dbfile" style="display:none" onchange="uploadDB(event)">
+  <button onclick="document.getElementById('dbfile').click()">Upload DB</button>
+</div>
+
+<script>
+fetch('/api/session')
+  .then(res => res.json())
+  .then(data => {
+    if (data.loggedIn && data.username === 'admin') {
+      document.getElementById('admin-panel').style.display = 'block';
+    }
+  });
+
+function downloadDB() {
+  window.location.href = '/admin/download-db';
+}
+
+function uploadDB(event) {
+  const file = event.target.files[0];
+  const formData = new FormData();
+  formData.append('dbfile', file); // must match multer field
+
+  fetch('/admin/upload-db', {
+    method: 'POST',
+    body: formData
+  }).then(res => {
+    if (res.ok) {
+      alert('Upload successful!');
+    } else {
+      alert('Upload failed!');
+    }
+  });
+}
+
+</script>
 
         <!-- Games Section -->
         <div id="games-section" class="section active">
