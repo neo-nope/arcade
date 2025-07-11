@@ -1,37 +1,37 @@
+// Firebase-powered server.js for BROWSECADE
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const simpleGit = require('simple-git');
-const bcrypt = require('bcryptjs');
-const session = require('express-session');
+const { initializeApp, applicationDefault, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const { getFirestore } = require('firebase-admin/firestore');
 const bodyParser = require('body-parser');
 const path = require('path');
 const http = require('http');
 const socketIo = require('socket.io');
-const multer = require('multer');
 const fs = require('fs');
+
+// Load Firebase service account credentials
+const serviceAccount = require('./serviceAccountKey.json');
+
+// Firebase Admin Init
+initializeApp({
+  credential: cert(serviceAccount)
+});
+
+const db = getFirestore();
+const auth = getAuth();
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
 const PORT = process.env.PORT || 3000;
-const db = new sqlite3.Database('cursed_arcade.db');
 
 // Middleware
 app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({
-  secret: 'cursed-arcade-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false }
-}));
 
-// Multer setup
-const upload = multer({ dest: 'uploads/' });
-
-// Cursed Insults
+// Constants
 const cursedInsults = [
   "🥦 Useless broccoli",
   "🧻 Soggy toilet paper",
@@ -45,7 +45,6 @@ const cursedInsults = [
   "🧽 Squeaky sponge"
 ];
 
-// Achievement definitions
 const achievements = {
   'death-magnet': { name: 'Death Magnet', description: 'Die in under 3 seconds', icon: '💀' },
   'tryhard-supreme': { name: 'Tryhard Supreme', description: 'Play for over 2 hours', icon: '🏆' },
@@ -58,273 +57,208 @@ const achievements = {
   'clickaholic': { name: 'Clickaholic', description: 'respect for this one', icon: '👇' },
 };
 
-// Database setup
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    avatar TEXT DEFAULT 'default.png',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS scores (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    username TEXT,
-    game TEXT NOT NULL,
-    score INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS achievements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    achievement_name TEXT NOT NULL,
-    description TEXT,
-    earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    UNIQUE(user_id, achievement_name)
-  )`, (err) => {
-    if (err) return console.error('Error creating achievements table:', err);
-
-    db.run(`DELETE FROM achievements
-            WHERE id NOT IN (
-              SELECT MIN(id)
-              FROM achievements
-              GROUP BY user_id, achievement_name
-            )`);
-
-    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_achievements 
-            ON achievements(user_id, achievement_name);`);
-  });
-});
-
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Register
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
+  const fakeEmail = `${username}@cursedarcade.fake`;
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function(err) {
-      if (err) {
-        if (err.message.includes('UNIQUE constraint failed')) {
-          return res.status(400).json({ error: 'Username already exists' });
-        }
-        return res.status(500).json({ error: 'Registration failed' });
-      }
-
-      req.session.userId = this.lastID;
-      req.session.username = username;
-
-      grantAchievement(this.lastID, 'first-blood');
-      if (username.toLowerCase() === 'admin') {
-        grantAchievement(this.lastID, 'admin-privilege');
-      }
-
-      res.json({ success: true, message: 'Welcome to the cursed realm!' });
+    const user = await auth.createUser({
+      email: fakeEmail,
+      password,
+      displayName: username
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+
+    await db.collection('users').doc(user.uid).set({
+      username,
+      avatar: 'default.png',
+      createdAt: new Date().toISOString()
+    });
+
+    await grantAchievement(user.uid, 'first-blood');
+    if (username.toLowerCase() === 'admin') {
+      await grantAchievement(user.uid, 'admin-privilege');
+    }
+
+    res.json({ success: true, uid: user.uid });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
+// Login
+app.post('/api/login', async (req, res) => {
+  const { idToken } = req.body;
+  try {
+    const decoded = await auth.verifyIdToken(idToken);
+    const uid = decoded.uid;
 
-  db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-    if (err) return res.status(500).json({ error: 'Database error' });
-    if (!user) return res.status(400).json({ error: 'Invalid credentials' });
+    const userDoc = await db.collection('users').doc(uid).get();
+    const username = userDoc.exists ? userDoc.data().username : 'Unknown';
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(400).json({ error: 'Invalid credentials' });
-
-    req.session.userId = user.id;
-    req.session.username = user.username;
-
-    res.json({ success: true, message: 'Welcome back, you cursed soul!' });
-  });
+    res.json({ success: true, uid, username });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
 });
 
-app.post('/api/score', (req, res) => {
-  const { game, score } = req.body;
-  if (!req.session.userId || !req.session.username) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'You must be logged in to submit scores!',
-      message: 'Create an account to save your shameful scores!' 
-    });
-  }
-
-  const username = req.session.username;
-  const userId = req.session.userId;
+// Submit Score
+app.post('/api/score', async (req, res) => {
+  const { uid, username, game, score } = req.body;
 
   const maxScores = {
-    'snake': 10000,
-    'tetris': 100000,
-    'dino': 50000,
-    '2048': 131072,
-    'flappy': 1000,
-    'pong': 100
+    snake: 10000,
+    tetris: 100000,
+    dino: 50000,
+    "2048": 131072,
+    flappy: 1000,
+    pong: 100
   };
 
-  if (score > maxScores[game]) {
-    grantAchievement(userId, 'cheater-detected');
-    return res.json({ 
-      success: false, 
-      message: 'Nice try, cheater! 🚨',
-      insult: 'Your coding skills are as fake as your score!'
+  try {
+    if (!uid || !username) return res.status(403).json({ error: 'Not authenticated' });
+
+    if (score > maxScores[game]) {
+      await grantAchievement(uid, 'cheater-detected');
+      return res.json({
+        success: false,
+        message: 'Nice try, cheater! 🚨',
+        insult: 'Your coding skills are as fake as your score!'
+      });
+    }
+
+    if (score < 10) {
+      await grantAchievement(uid, 'death-magnet');
+    }
+
+    await db.collection('scores').add({
+      uid,
+      username,
+      game,
+      score,
+      createdAt: new Date().toISOString()
     });
+
+    const scoresSnapshot = await db.collection('scores')
+      .where('game', '==', game)
+      .where('score', '>', score)
+      .get();
+
+    const rank = scoresSnapshot.size + 1;
+    const insult = rank > 50 ? cursedInsults[Math.floor(Math.random() * cursedInsults.length)] : null;
+
+    res.json({ success: true, message: 'Score saved!', rank, insult });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Score submission failed' });
   }
-
-  if (score < 10) {
-    grantAchievement(userId, 'death-magnet');
-  }
-
-  db.run('INSERT INTO scores (user_id, username, game, score) VALUES (?, ?, ?, ?)', 
-    [userId, username, game, score], function(err) {
-      if (err) return res.status(500).json({ error: 'Failed to save score' });
-
-      db.get(`SELECT COUNT(*) as rank FROM scores WHERE game = ? AND score > ?`, 
-        [game, score], (err, result) => {
-          const rank = result ? result.rank + 1 : 1;
-          const insult = rank > 50 ? cursedInsults[Math.floor(Math.random() * cursedInsults.length)] : null;
-          res.json({ success: true, message: 'Score saved!', rank, insult });
-        });
-    });
 });
 
-app.get('/api/leaderboard/:game', (req, res) => {
-  const game = req.params.game;
-  db.all(`SELECT username, MAX(score) as best_score, COUNT(*) as games_played,
-          datetime(created_at, 'localtime') as last_played
-          FROM scores 
-          WHERE game = ? 
-          GROUP BY username 
-          ORDER BY best_score DESC 
-          LIMIT 10`, 
-    [game], (err, rows) => {
-      if (err) return res.status(500).json({ error: 'Database error' });
+// Leaderboard
+app.get('/api/leaderboard/:game', async (req, res) => {
+  const { game } = req.params;
+  try {
+    const snapshot = await db.collection('scores')
+      .where('game', '==', game)
+      .orderBy('score', 'desc')
+      .limit(10)
+      .get();
 
-      const leaderboard = rows.map((row, index) => ({
-        ...row,
+    const leaderboard = [];
+    snapshot.forEach((doc, index) => {
+      const data = doc.data();
+      leaderboard.push({
+        username: data.username,
+        best_score: data.score,
+        last_played: data.createdAt,
+        games_played: 'n/a', // Optional: count user games separately
         rank: index + 1,
-        title: index === 0 ? '👑 Cursed Champion' : 
-               index < 3 ? '🏆 Decent Human' : 
-               index < 7 ? '🥉 Mediocre Mortal' : 
+        title: index === 0 ? '👑 Cursed Champion' :
+               index < 3 ? '🏆 Decent Human' :
+               index < 7 ? '🥉 Mediocre Mortal' :
                '🥦 Useless Broccoli'
-      }));
-
-      res.json(leaderboard);
+      });
     });
+
+    res.json(leaderboard);
+  } catch (err) {
+    res.status(500).json({ error: 'Leaderboard error' });
+  }
 });
 
-app.get('/api/achievements', (req, res) => {
-  if (!req.session.userId) return res.json([]);
+// Get Achievements
+app.get('/api/achievements/:uid', async (req, res) => {
+  const { uid } = req.params;
 
-  db.all(`SELECT achievement_name, earned_at FROM achievements 
-          WHERE user_id = ? 
-          ORDER BY earned_at DESC`, 
-    [req.session.userId], (err, rows) => {
-      if (err) return res.status(500).json({ error: 'Database error' });
+  try {
+    const snapshot = await db.collection('achievements')
+      .where('uid', '==', uid)
+      .orderBy('earnedAt', 'desc')
+      .get();
 
-      const userAchievements = rows.map(row => ({
-        ...achievements[row.achievement_name],
-        earned_at: row.earned_at
-      }));
-
-      res.json(userAchievements);
+    const list = snapshot.docs.map(doc => {
+      const ach = doc.data();
+      return {
+        ...achievements[ach.name],
+        earnedAt: ach.earnedAt
+      };
     });
+
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch achievements' });
+  }
 });
 
-app.post('/api/achievement/:achievementName', (req, res) => {
+// Grant Custom Achievement (manually or via frontend call)
+app.post('/api/achievement/:achievementName', async (req, res) => {
+  const { uid } = req.body;
   const achievementName = req.params.achievementName;
-  if (!req.session.userId) return res.status(401).json({ error: 'Not logged in' });
-  if (!achievements[achievementName]) return res.status(400).json({ error: 'Achievement not found' });
 
-  grantAchievement(req.session.userId, achievementName, (granted, err) => {
-    if (err) return res.status(500).json({ error: 'Failed to grant achievement' });
+  if (!achievements[achievementName]) return res.status(400).json({ error: 'Invalid achievement' });
 
+  try {
+    const granted = await grantAchievement(uid, achievementName);
     if (granted) {
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         achievement: achievements[achievementName],
         message: `Achievement unlocked: ${achievements[achievementName].name}!`
       });
     } else {
-      res.json({ success: false });
+      res.json({ success: false, message: 'Already unlocked' });
     }
-  });
-});
-
-app.get('/api/session', (req, res) => {
-  if (req.session.userId && req.session.username) {
-    res.json({ 
-      loggedIn: true, 
-      username: req.session.username,
-      userId: req.session.userId 
-    });
-  } else {
-    res.json({ loggedIn: false });
-  }
-});
-
-app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
-});
-
-function grantAchievement(userId, achievementName, callback = () => {}) {
-  db.get('SELECT 1 FROM achievements WHERE user_id = ? AND achievement_name = ?', 
-    [userId, achievementName], (err, row) => {
-      if (err) return callback(false, err);
-      if (row) return callback(false, null);
-
-      db.run('INSERT INTO achievements (user_id, achievement_name) VALUES (?, ?)', 
-        [userId, achievementName], (err) => {
-          if (err) return callback(false, err);
-          console.log(`Achievement '${achievementName}' granted to user ${userId}`);
-          callback(true, null);
-        });
-    });
-}
-
-// Admin DB download
-app.get('/admin/download-db', (req, res) => {
-  if (req.session.username !== 'admin') return res.status(403).json({ error: 'Access denied' });
-
-  const filePath = path.join(__dirname, 'cursed_arcade.db');
-  res.download(filePath, 'cursed_arcade.db');
-});
-
-const git = simpleGit();
-
-async function commitAndPushDbUpdate() {
-  try {
-    const dbFile = 'cursed_arcade.db'; // replace with your .db file name
-
-    await git.add(dbFile);
-    await git.commit(`Update ${dbFile} - ${new Date().toISOString()}`);
-    await git.push(); // change branch name if not 'main'
-
-    console.log('DB file committed and pushed successfully!');
   } catch (err) {
-    console.error('Failed to push DB update:', err);
+    res.status(500).json({ error: 'Failed to grant achievement' });
   }
+});
+
+// Grant Achievement Function
+async function grantAchievement(uid, name) {
+  const snapshot = await db.collection('achievements')
+    .where('uid', '==', uid)
+    .where('name', '==', name)
+    .get();
+
+  if (!snapshot.empty) return false;
+
+  await db.collection('achievements').add({
+    uid,
+    name,
+    earnedAt: new Date().toISOString()
+  });
+
+  console.log(`Achievement '${name}' granted to user ${uid}`);
+  return true;
 }
 
-app.post('/admin/upload-db', upload.single('dbfile'), (req, res) => {
-  if (!req.file) return res.status(400).send('No file uploaded');
-
-    commitAndPushDbUpdate();
-    });
-// Socket.IO events
+// Socket.IO Events
 io.on('connection', (socket) => {
   console.log('A cursed soul connected');
   socket.on('disconnect', () => {
@@ -335,16 +269,13 @@ io.on('connection', (socket) => {
   });
 });
 
-// Health check
+// Health Check
 app.get('/health', (req, res) => {
-  db.get('SELECT 1', [], (err) => {
-    if (err) return res.status(500).json({ status: 'DEAD', error: err.message });
-    res.status(200).json({ status: 'OK', message: 'Still cursed. Still breathing.' });
-  });
+  res.status(200).json({ status: 'OK', message: 'Still cursed. Still breathing.' });
 });
 
-// Start server
+// Start Server
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🎮 BROWSERCADE is running on port ${PORT}`);
-  console.log(`💀 Prepare for maximum cursed-ness!`);
+  console.log(`🎮 BROWSECADE is running on port ${PORT}`);
+  console.log(`💀 Maximum cursed-ness enabled`);
 });
