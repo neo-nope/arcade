@@ -8,6 +8,7 @@ var tetrisGame = (function() {
     var lastTime = 0;
     var score = 0;
     var lines = 0;
+    let blindTimer = 0;
     var canMove = true;
     var level = 1;
     var gameRunning = true;
@@ -68,7 +69,9 @@ var tetrisGame = (function() {
         '#E1F5FE', // Glass block - Transparent Blue
         '#FF6EC7', // Color bomb - Hot Pink
         '#808080', // Obstacle block - Gray
-        '#000000'  // Movement block - Nigger
+        '#000000',  // Movement block - Nigger
+        '#AA00FF' // for example
+
     ];
     
     // 🌀 CHAOS EVENTS DEFINITIONS
@@ -108,7 +111,15 @@ var tetrisGame = (function() {
             icon: '😵',
             duration: 10000, // 10 seconds
             message: '😵 GHOST DISABLED! No preview for you!'
-        }
+        },
+        BLINDNESS: {
+    name: 'Blackout',
+    icon: '😵',
+    duration: 1000, // 1 second
+    message: '😵 BLACKOUT! You can’t see anything!',
+    chance: 0.15 // 15% chance if selected randomly
+}
+
     };
     
     // 💣 SPECIAL BLOCK TYPES
@@ -117,28 +128,49 @@ var tetrisGame = (function() {
             name: 'Glitch Block',
             icon: '🌀',
             color: 10,
-            chance: 0.4,
+            chance: 0.15,
             message: '🌀 GLITCH BLOCK! It has a mind of its own!'
         },
         GLASS: {
             name: 'Glass Block',
             icon: '🔮',
             color: 11,
-            chance: 0.8,
+            chance: 0.15,
             message: '🔮 GLASS BLOCK! Phases through obstacles!'
         },
         COLOR_BOMB: {
             name: 'Color Bomb',
             icon: '💣',
             color: 12,
-            chance: 0.3,
+            chance: 0.10,
             message: '💣 COLOR BOMB! Clears matching colors!'
-        }
+        },
+
+        SHUFFLE: {
+    name: 'Shuffle Block',
+    icon: '🔀',
+    color: 15,
+    chance: 0.10,
+    message: '🔀 SHUFFLE BLOCK! Everything gets mixed!'
+},
+MIRROR: {
+    name: 'Mirror Block',
+    icon: '🪞',
+    color: 13,
+    chance: 0.10,
+    message: '🪞 MIRROR! Left is now right!'
+},
+
+
     };
     
     // Rainbow colors for rainbow mode
     const rainbowColors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
-    
+    function triggerBlindEffect(duration = 1000) {
+    blindTimer = duration;
+    showMessage('😵 BLACKOUT!');
+}
+
     // Power-up types
     const POWERUP_TYPES = {
         CLEAR_LINES: { color: '#FFD700', icon: '💥', chance: 0.01 },
@@ -213,6 +245,13 @@ var tetrisGame = (function() {
         if (type === 'TINY') return [ // Tiny single block
             [1]
         ];
+        if (type === "HOLE") return [
+            [1,1,1,1,1,1],
+            [1,0,0,0,0,1],
+            [1,0,0,0,0,1],
+            [1,0,0,0,0,1],
+            [1,1,1,1,1,1],
+        ]
     }
 
     function collide(arena, player) {
@@ -473,6 +512,13 @@ var tetrisGame = (function() {
         if (collide(arena, player)) {
             player.pos.y--;
             merge(arena, player);
+            if (currentSpecialBlock && currentSpecialBlock.type === 'SHUFFLE') {
+    activateShuffleEffect();
+}
+if (currentSpecialBlock?.type === 'MIRROR') {
+    mirrorArena();
+}
+
             playerReset();
             arenaSweep();
         }
@@ -736,7 +782,47 @@ var tetrisGame = (function() {
             });
         }
     }
-    
+    function activateShuffleEffect() {
+    const filledCells = [];
+
+    // Collect all filled blocks
+    for (let y = 0; y < arena.length; y++) {
+        for (let x = 0; x < arena[y].length; x++) {
+            if (arena[y][x] !== 0) {
+                filledCells.push({ value: arena[y][x] });
+                arena[y][x] = 0; // Clear it
+            }
+        }
+    }
+
+    // Only place them in the lowest 5 rows
+    const targetRows = arena.slice(-5);
+    const availableSpots = [];
+
+    for (let y = arena.length - 5; y < arena.length; y++) {
+        for (let x = 0; x < arena[y].length; x++) {
+            availableSpots.push({ x, y });
+        }
+    }
+
+    // Shuffle available positions
+    for (let i = availableSpots.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [availableSpots[i], availableSpots[j]] = [availableSpots[j], availableSpots[i]];
+    }
+
+    // Re-place shuffled blocks
+    const limit = Math.min(filledCells.length, availableSpots.length);
+for (let i = 0; i < limit; i++) {
+    const cell = filledCells[i];
+    const pos = availableSpots[i];
+    arena[pos.y][pos.x] = cell.value;
+    createParticles(pos.x, pos.y, colors[cell.value], 3);
+}
+    shakeIntensity = 12;
+}
+
+
     function drawGameOverScreen() {
         // Animated background
         ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
@@ -826,15 +912,11 @@ var tetrisGame = (function() {
                 break;
             case 'COLOR_BOMB':
                 // Color bomb effects applied on placement
-                break;
-            case 'CHONK':
-                    if (!collide(arena, player)) {
-                        speedBoost = speedBoost + 10;
-                    }
-                    else{
-                        speedBoost = speedBoost -10;
-                    }
-                    break;
+                break;      
+            case 'SHUFFLE':
+    // No prep needed — just triggers on placement
+    break;
+            
                     
         }
         
@@ -867,7 +949,14 @@ var tetrisGame = (function() {
                 break;
         }
     }
-    
+    function mirrorArena() {
+    for (let y = 0; y < arena.length; y++) {
+        arena[y] = arena[y].reverse();
+    }
+    showMessage('🪞 Arena Flipped!');
+    shakeIntensity = 6;
+}
+
     function activateColorBomb(bombColor) {
         let blocksCleared = 0;
         
@@ -903,6 +992,10 @@ var tetrisGame = (function() {
         // STEROIDS random events for maximum chaos!
         if (Math.random() < 0.002) { // More frequent than original
             const events = [
+                () => {
+                    triggerRandomEvents
+                    showMessage('I cannot see')
+                },
                 () => {
                     rainbowMode = !rainbowMode;
                     showMessage(rainbowMode ? '🌈 RAINBOW MODE ACTIVATED!' : '🌈 Rainbow mode deactivated');
@@ -1033,7 +1126,7 @@ var tetrisGame = (function() {
     
     function playerReset() {
         const standardPieces = 'ILJOZST';
-        const steroidsOnlyPieces = ['MEGA_I', 'TINY', 'BOMB'];
+        const steroidsOnlyPieces = ['MEGA_I', 'TINY', 'BOMB', 'HOLE'];
         let piece;
         
         // 💣 Check for special block generation first (INCREASED CHANCE FOR TESTING)
@@ -1048,7 +1141,7 @@ var tetrisGame = (function() {
             glitchRotateTimer = 0;
             
             // Higher chance of special pieces on higher levels
-            const specialChance = Math.min(0.3, level * 0.02);
+            const specialChance = Math.min(0.9, level * 0.1);
             
             if (Math.random() < specialChance) {
                 if (Math.random() < 0.05) {
@@ -1298,6 +1391,13 @@ var tetrisGame = (function() {
         });
         
         merge(arena, player);
+        if (currentSpecialBlock && currentSpecialBlock.type === 'SHUFFLE') {
+    activateShuffleEffect();
+}
+if (currentSpecialBlock?.type === 'MIRROR') {
+    mirrorArena();
+}
+
         playerReset();
         arenaSweep();
         
