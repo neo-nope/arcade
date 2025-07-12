@@ -1,6 +1,7 @@
 /* Retro Windows 95 CSS Theme with Mobile Support */
 
 body {
+    
     font-family: 'Lucida Console', Monaco, monospace;
     background: linear-gradient(45deg, #008080, #004040);
     color: #FFF;
@@ -198,7 +199,6 @@ body {
     top: 0;
     width: 100%;
     height: 100%;
-    overflow: auto;
     background-color: rgba(0,0,0,0.7);
 }
 
@@ -237,7 +237,6 @@ body {
     cursor: pointer;
     font-size: 12px;
 }
-
 .game-controls {
     margin-top: 15px;
 }

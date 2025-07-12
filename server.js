@@ -51,6 +51,8 @@ const achievements = {
   'old': { name: 'Old', description: 'You clicked on the dino game! Welcome to the prehistoric era!', icon: '🦕' },
   'idiot': { name: 'Idiot', description: 'Just use the website! nobody makes apps these days', icon: '😂🫵' },
   'clickaholic': { name: 'Clickaholic', description: 'respect for this one', icon: '👇' },
+  'ghost': { name: 'Ghost', description: 'your hopes have been ghosted', icon: '👻' },
+  
 };
 
 // Routes

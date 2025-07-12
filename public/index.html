@@ -221,15 +221,12 @@ async function unlockAllAchievements() {
                     <div class="difficulty">Difficulty: Easy</div>
                 </div>
                 
-                <!--<div class="game-card" onclick="playGame('tetris')">
+                <div class="game-card" onclick="playGame('tetris')">
                     <div class="game-icon">🧩</div>
-                    <h3>Tetris</h3>
-                    <p>Stack your failures!</p>
-                    <div class="difficulty">Difficulty: Medium</div>
-                </div> 
-                
-                TO DO: FIX TETRIS
-                -->
+                    <h3>Tetris ON STEROIDS</h3>
+                    <p>Stack blocks... if you can handle the chaos! 💪</p>
+                    <div class="difficulty">Difficulty: EXTREME</div>
+                </div>
                 
                 <div class="game-card" onclick="playGame('dino')">
                     <div class="game-icon">🦕</div>
@@ -273,7 +270,7 @@ async function unlockAllAchievements() {
             <h2>🏆 Hall of Shame</h2>
             <div class="game-selector">
                 <button class="btn" onclick="loadLeaderboard('snake')">Snake</button>
-                <!--<button class="btn" onclick="loadLeaderboard('tetris')">Tetris</button>-->
+                <button class="btn" onclick="loadLeaderboard('tetris')">Tetris ON STEROIDS</button>
                 <button class="btn" onclick="loadLeaderboard('dino')">Dino</button>
                 <button class="btn" onclick="loadLeaderboard('2048')">2048</button>
                 <button class="btn" onclick="loadLeaderboard('flappy')">Flappy</button>
@@ -332,11 +329,10 @@ async function unlockAllAchievements() {
                     <h3 id="game-title">Game</h3>
                     <button class="close-btn" onclick="closeGame()">&times;</button>
                 </div>
-                <div class="modal-body">
+                
                     <div id="game-container"></div>
-                    <div class="game-controls">
+                    <div class="modal-body"><div class="game-controls">
                         <button class="btn" onclick="restartGame()">🔄 Restart</button>
-                        <button class="btn" onclick="closeGame()">🚪 Give Up</button>
                     </div>
                 </div>
             </div>
@@ -346,7 +342,7 @@ async function unlockAllAchievements() {
         <div id="message-container" class="message-container"></div>
         
         <!-- Mobile Touch Controls -->
-        <div id="mobile-controls" class="mobile-controls">
+        <!--<div id="mobile-controls" class="mobile-controls">
             <div class="direction-pad">
                 <div></div>
                 <button class="control-btn" id="up-btn">↑</button>
@@ -362,7 +358,7 @@ async function unlockAllAchievements() {
                 <button class="control-btn" id="action-btn">🎮</button>
                 <button class="control-btn" id="jump-btn">🚀</button>
             </div>
-        </div>
+        </div>-->
     </div>
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
